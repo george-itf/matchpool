@@ -249,7 +249,7 @@ export default async function LeaguePage({ params }: PageProps) {
         {/* Activity Feed */}
         <div className="card mb-4">
           <p className="section-header">Activity</p>
-          <ActivityFeed leagueId={id} initialActivities={activities} />
+          <ActivityFeed leagueId={id} initialActivities={activities} userId={user.id} />
         </div>
       </div>
 
