@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { IconX, IconArrowLeft } from "@/components/icons";
 
 interface Fixture {
@@ -44,6 +44,7 @@ export function OddsBrowser({
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [fixtures, setFixtures] = useState<Record<string, Fixture[]>>({});
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [selectedFixture, setSelectedFixture] = useState<Fixture | null>(null);
   const [markets, setMarkets] = useState<Market[]>([]);
   const [loadingOdds, setLoadingOdds] = useState(false);
@@ -54,12 +55,23 @@ export function OddsBrowser({
     
     const fetchFixtures = async () => {
       setLoading(true);
+      setError(null);
       try {
         const res = await fetch(`/api/football/fixtures?date=${date}`);
         const data = await res.json();
-        setFixtures(data.byLeague || {});
+        
+        if (data.error) {
+          setError(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
+          setFixtures({});
+        } else {
+          setFixtures(data.byLeague || {});
+          if (Object.keys(data.byLeague || {}).length === 0) {
+            setError(`No fixtures found (${data.totalFound || 0} total matches, ${data.filteredCount || 0} in popular leagues)`);
+          }
+        }
       } catch (err) {
         console.error("Failed to fetch fixtures:", err);
+        setError("Failed to connect to API");
       }
       setLoading(false);
     };
@@ -99,7 +111,6 @@ export function OddsBrowser({
       oddsFractional: option.oddsFractional,
     });
     
-    // Reset and close
     setSelectedFixture(null);
     setMarkets([]);
     onClose();
@@ -152,7 +163,7 @@ export function OddsBrowser({
           </button>
         </div>
 
-        {/* Date selector (only show on fixtures view) */}
+        {/* Date selector */}
         {!selectedFixture && (
           <div className="flex gap-2 p-4 overflow-x-auto border-b border-[var(--border)]">
             {getDateOptions().map((d) => (
@@ -188,7 +199,10 @@ export function OddsBrowser({
               {loadingOdds ? (
                 <div className="text-center py-8 text-[var(--text-secondary)]">Loading odds...</div>
               ) : markets.length === 0 ? (
-                <div className="text-center py-8 text-[var(--text-secondary)]">No odds available</div>
+                <div className="text-center py-8">
+                  <p className="text-[var(--text-secondary)]">No odds available yet</p>
+                  <p className="text-xs text-[var(--text-secondary)] mt-1">Odds usually appear 2-3 days before kickoff</p>
+                </div>
               ) : (
                 <div className="space-y-4">
                   {markets.map((market) => (
@@ -216,6 +230,11 @@ export function OddsBrowser({
             <div>
               {loading ? (
                 <div className="text-center py-8 text-[var(--text-secondary)]">Loading fixtures...</div>
+              ) : error ? (
+                <div className="text-center py-8">
+                  <p className="text-[var(--text-secondary)]">{error}</p>
+                  <p className="text-xs text-[var(--text-secondary)] mt-2">Try selecting a different date</p>
+                </div>
               ) : Object.keys(fixtures).length === 0 ? (
                 <div className="text-center py-8 text-[var(--text-secondary)]">No fixtures found</div>
               ) : (
