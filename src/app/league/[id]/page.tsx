@@ -55,9 +55,10 @@ export default async function LeaguePage({ params }: PageProps) {
     redirect("/dashboard");
   }
 
-  const currentSeason = league.seasons?.find((s: { status: string }) => s.status === "active") ||
-    league.seasons?.find((s: { status: string }) => s.status === "upcoming") ||
-    league.seasons?.[0];
+  const seasons = (league.seasons || []) as Array<{ id: string; status: string; season_number: number; starts_at: string; ends_at: string; pot_amount: number }>;
+  const currentSeason = seasons.find((s) => s.status === "active") ||
+    seasons.find((s) => s.status === "upcoming") ||
+    seasons[0];
 
   // Get leaderboard data
   let leaderboard: Array<{
@@ -78,7 +79,7 @@ export default async function LeaguePage({ params }: PageProps) {
   }
 
   // Get recent bets for this season
-  let recentBets: Array<{
+  interface RecentBet {
     id: string;
     user_id: string;
     bet_type: string;
@@ -89,7 +90,9 @@ export default async function LeaguePage({ params }: PageProps) {
     placed_at: string;
     profiles: { display_name: string; avatar_url: string | null };
     bet_legs: Array<{ selection: string; odds_fractional: string; result: string }>;
-  }> = [];
+  }
+  
+  let recentBets: RecentBet[] = [];
   
   if (currentSeason) {
     const { data } = await supabase
@@ -117,7 +120,22 @@ export default async function LeaguePage({ params }: PageProps) {
       .order("placed_at", { ascending: false })
       .limit(10);
     
-    recentBets = (data as typeof recentBets) || [];
+    // Transform the data to match expected type
+    recentBets = ((data || []) as unknown as Array<{
+      id: string;
+      user_id: string;
+      bet_type: string;
+      stake: number;
+      potential_return: number;
+      actual_return: number;
+      status: string;
+      placed_at: string;
+      profiles: { display_name: string; avatar_url: string | null } | Array<{ display_name: string; avatar_url: string | null }>;
+      bet_legs: Array<{ selection: string; odds_fractional: string; result: string }>;
+    }>).map(bet => ({
+      ...bet,
+      profiles: Array.isArray(bet.profiles) ? bet.profiles[0] : bet.profiles
+    }));
   }
 
   // Get active group bets
