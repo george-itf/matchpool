@@ -4,81 +4,149 @@ import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 
-interface GroupBetAdminControlsProps {
-  groupBetId: string;
-  status: string;
-  submissionsCount: number;
-  winningLegsCount: number;
+interface Member {
+  user_id: string;
+  profiles: { display_name: string };
 }
 
-export function GroupBetAdminControls({
+export function GroupBetAdminControls({ 
   groupBetId,
   status,
-  submissionsCount,
-  winningLegsCount,
-}: GroupBetAdminControlsProps) {
+  leagueId,
+  members,
+  submissionCount,
+  winningCount
+}: { 
+  groupBetId: string;
+  status: string;
+  leagueId: string;
+  members: Member[];
+  submissionCount: number;
+  winningCount: number;
+}) {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const supabase = createClient();
 
-  const handleTransition = async (newStatus: string) => {
+  const moveToVoting = async () => {
     setLoading(true);
-    try {
-      if (newStatus === "voting_open") {
-        // Simple status update
-        await supabase.rpc("transition_to_voting", { p_group_bet_id: groupBetId });
-      } else if (newStatus === "betting") {
-        // Finalize and select winners
-        await supabase.rpc("finalize_group_bet", { p_group_bet_id: groupBetId });
-      }
-      router.refresh();
-    } catch (err) {
-      console.error("Transition error:", err);
-    } finally {
-      setLoading(false);
-    }
+    await supabase
+      .from("group_bets")
+      .update({ status: "voting" })
+      .eq("id", groupBetId);
+    router.refresh();
+    setLoading(false);
   };
 
-  if (status === "settled") return null;
+  const finalize = async () => {
+    setLoading(true);
+    
+    // Get top N submissions by votes
+    const { data: topSubmissions } = await supabase
+      .from("group_bet_submissions")
+      .select("id")
+      .eq("group_bet_id", groupBetId)
+      .order("votes", { ascending: false })
+      .limit(winningCount);
+
+    if (topSubmissions) {
+      // Mark them as selected
+      for (const sub of topSubmissions) {
+        await supabase
+          .from("group_bet_submissions")
+          .update({ selected: true })
+          .eq("id", sub.id);
+      }
+    }
+
+    await supabase
+      .from("group_bets")
+      .update({ status: "finalized" })
+      .eq("id", groupBetId);
+
+    router.refresh();
+    setLoading(false);
+  };
+
+  const settle = async (won: boolean) => {
+    setLoading(true);
+    await supabase
+      .from("group_bets")
+      .update({ status: "settled" })
+      .eq("id", groupBetId);
+    // TODO: handle winnings distribution
+    router.refresh();
+    setLoading(false);
+  };
+
+  const deleteGroupBet = async () => {
+    if (!confirm("Delete this group bet? This cannot be undone.")) return;
+    setLoading(true);
+    await supabase.from("group_bet_votes").delete().eq("submission_id", groupBetId);
+    await supabase.from("group_bet_submissions").delete().eq("group_bet_id", groupBetId);
+    await supabase.from("group_bets").delete().eq("id", groupBetId);
+    router.push(`/league/${leagueId}/group-bet`);
+  };
 
   return (
-    <div className="card bg-[var(--warning)]/10 border-[var(--warning)]/30 space-y-3">
-      <p className="text-sm font-medium text-[var(--warning)]">admin controls</p>
-      
-      {status === "submissions_open" && (
-        <div className="space-y-2">
-          <p className="text-sm text-[var(--muted)]">
-            {submissionsCount} legs submitted. Move to voting when ready.
+    <div className="space-y-3">
+      {status === "collecting" && (
+        <>
+          <p className="text-sm text-[var(--text-secondary)]">
+            {submissionCount} legs submitted so far
           </p>
           <button
-            onClick={() => handleTransition("voting_open")}
+            onClick={moveToVoting}
+            disabled={loading || submissionCount < winningCount}
             className="btn btn-primary w-full"
-            disabled={loading || submissionsCount === 0}
           >
-            {loading ? "..." : "start voting"}
+            {loading ? "..." : "Open Voting"}
+          </button>
+          {submissionCount < winningCount && (
+            <p className="text-xs text-[var(--text-secondary)] text-center">
+              Need at least {winningCount} submissions to start voting
+            </p>
+          )}
+        </>
+      )}
+
+      {status === "voting" && (
+        <button
+          onClick={finalize}
+          disabled={loading}
+          className="btn btn-primary w-full"
+        >
+          {loading ? "..." : "Finalize Acca"}
+        </button>
+      )}
+
+      {status === "finalized" && (
+        <div className="flex gap-3">
+          <button
+            onClick={() => settle(false)}
+            disabled={loading}
+            className="btn btn-danger flex-1"
+          >
+            Lost
+          </button>
+          <button
+            onClick={() => settle(true)}
+            disabled={loading}
+            className="btn btn-primary flex-1"
+          >
+            Won
           </button>
         </div>
       )}
 
-      {status === "voting_open" && (
-        <div className="space-y-2">
-          <p className="text-sm text-[var(--muted)]">
-            Finalize will pick top {winningLegsCount} voted legs and create the acca.
-          </p>
-          <button
-            onClick={() => handleTransition("betting")}
-            className="btn btn-primary w-full"
-            disabled={loading || submissionsCount < winningLegsCount}
-          >
-            {loading ? "..." : "finalize & place bet"}
-          </button>
-        </div>
-      )}
-
-      {status === "betting" && (
-        <p className="text-sm text-[var(--muted)]">
-          Use the settle buttons below when results are in.
-        </p>
+      {status !== "settled" && (
+        <button
+          onClick={deleteGroupBet}
+          disabled={loading}
+          className="text-sm text-[var(--danger)] w-full py-2"
+        >
+          Delete Group Bet
+        </button>
       )}
     </div>
   );

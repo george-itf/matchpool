@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
+import { IconArrowLeft, IconPlus } from "@/components/icons";
 import { CreateGroupBetButton } from "@/components/create-group-bet-button";
 
 interface PageProps {
@@ -25,64 +26,99 @@ export default async function GroupBetsPage({ params }: PageProps) {
 
   const { data: league } = await supabase
     .from("leagues")
-    .select(`*, seasons ( id, status )`)
+    .select(`*, seasons ( id, season_number, status )`)
     .eq("id", id)
     .single();
 
   if (!league) notFound();
 
-  const seasons = (league.seasons || []) as Array<{ id: string; status: string }>;
-  const currentSeason = seasons.find((s) => s.status === "active");
+  const seasons = (league.seasons || []) as Array<{ id: string; status: string; season_number: number }>;
+  const season = seasons.find((s) => s.status === "active") || seasons[0];
 
-  let groupBets: Array<{ id: string; title: string; status: string; result: string; buyin_per_user: number }> = [];
-  if (currentSeason) {
+  // Get group bets
+  let groupBets: Array<{
+    id: string;
+    title: string;
+    status: string;
+    buyin_per_person: number;
+    legs_per_user: number;
+    created_at: string;
+  }> = [];
+  if (season) {
     const { data } = await supabase
       .from("group_bets")
-      .select("id, title, status, result, buyin_per_user")
-      .eq("season_id", currentSeason.id)
+      .select("*")
+      .eq("season_id", season.id)
       .order("created_at", { ascending: false });
     groupBets = data || [];
   }
 
+  const isAdmin = membership.role === "admin";
+
   return (
-    <main className="min-h-screen px-5 py-6 safe-t safe-b">
-      <div className="max-w-md mx-auto">
-        <header className="flex items-center justify-between mb-6">
-          <Link href={`/league/${id}`} className="text-[var(--muted)] text-sm">← Back</Link>
-          <h1 className="font-medium">Group bets</h1>
-          <div className="w-12" />
-        </header>
+    <main className="min-h-screen bg-[var(--bg)] safe-t safe-b">
+      {/* Header */}
+      <div className="header flex items-center justify-between">
+        <Link href={`/league/${id}`} className="flex items-center gap-1 text-[var(--accent)] font-medium text-sm">
+          <IconArrowLeft className="w-4 h-4" />
+          <span>Back</span>
+        </Link>
+        <h1 className="font-bold text-sm uppercase tracking-wide">Group Bets</h1>
+        <div className="w-16" />
+      </div>
 
-        <p className="text-sm text-[var(--muted)] mb-6">
-          Everyone submits legs, vote on the best, build a combined acca.
-        </p>
+      <div className="p-4 max-w-lg mx-auto">
+        {/* Intro */}
+        <div className="card mb-4">
+          <p className="text-sm text-[var(--text-secondary)]">
+            Everyone submits their best selections, vote on the top picks, build a combined acca and split any winnings.
+          </p>
+        </div>
 
-        {groupBets.length > 0 ? (
-          <ul className="border-t border-[var(--border)] mb-6">
-            {groupBets.map((gb) => (
-              <li key={gb.id} className="border-b border-[var(--border)]">
-                <Link href={`/league/${id}/group-bet/${gb.id}`} className="flex justify-between py-3 text-sm">
-                  <span>{gb.title}</span>
-                  <span className={
-                    gb.result === "won" ? "text-[var(--green)]" :
-                    gb.result === "lost" ? "text-[var(--red)]" :
-                    "text-[var(--muted)]"
-                  }>
-                    {gb.status === "submissions_open" ? "Submit" :
-                     gb.status === "voting_open" ? "Vote" :
-                     gb.status === "betting" ? "Placed" :
-                     gb.result === "won" ? "Won" : gb.result === "lost" ? "Lost" : gb.status}
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-sm text-[var(--muted)] py-8 text-center">No group bets yet</p>
+        {/* Admin: Create group bet */}
+        {isAdmin && season && (
+          <div className="mb-4">
+            <CreateGroupBetButton 
+              seasonId={season.id} 
+              leagueId={id}
+              defaultBuyin={league.group_bet_buyin || 2}
+              defaultLegs={league.group_bet_legs_per_user || 4}
+              defaultWinning={league.group_bet_winning_legs || 5}
+            />
+          </div>
         )}
 
-        {membership.role === "admin" && currentSeason && (
-          <CreateGroupBetButton leagueId={id} seasonId={currentSeason.id} />
+        {/* Group bets list */}
+        {groupBets.length > 0 ? (
+          <div className="space-y-3">
+            {groupBets.map((gb) => (
+              <Link key={gb.id} href={`/league/${id}/group-bet/${gb.id}`} className="card block">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-semibold">{gb.title}</h3>
+                    <p className="text-xs text-[var(--text-secondary)]">
+                      £{gb.buyin_per_person} buy-in · {gb.legs_per_user} legs each
+                    </p>
+                  </div>
+                  <span className={`badge ${
+                    gb.status === 'collecting' ? 'badge-yellow' :
+                    gb.status === 'voting' ? 'badge-green' :
+                    gb.status === 'finalized' ? 'badge-gray' :
+                    'badge-gray'
+                  }`}>
+                    {gb.status}
+                  </span>
+                </div>
+              </Link>
+            ))}
+          </div>
+        ) : (
+          <div className="card text-center py-10">
+            <p className="text-[var(--text-secondary)]">No group bets yet</p>
+            {isAdmin && (
+              <p className="text-sm text-[var(--text-secondary)] mt-1">Create one to get started</p>
+            )}
+          </div>
         )}
       </div>
     </main>

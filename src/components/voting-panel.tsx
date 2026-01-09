@@ -3,81 +3,116 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
+import { IconCheck } from "@/components/icons";
 
 interface Submission {
   id: string;
   user_id: string;
   selection: string;
   odds_fractional: string;
-  votes_count: number;
+  votes: number;
   profiles: { display_name: string };
 }
 
-export function VotingPanel({ groupBetId, submissions, votedIds, userId, winningCount }: {
-  groupBetId: string;
-  submissions: Submission[];
+export function VotingPanel({ 
+  submissions, 
+  votedIds, 
+  userId,
+  winningCount
+}: { 
+  submissions: Submission[]; 
   votedIds: Set<string>;
   userId: string;
   winningCount: number;
 }) {
-  const [voted, setVoted] = useState(votedIds);
   const [loading, setLoading] = useState<string | null>(null);
+  const [localVoted, setLocalVoted] = useState(votedIds);
   const router = useRouter();
   const supabase = createClient();
 
-  const toggle = async (subId: string) => {
-    const isOwn = submissions.find((s) => s.id === subId)?.user_id === userId;
-    if (isOwn) return;
-
-    setLoading(subId);
-    const hasVoted = voted.has(subId);
-
-    // Optimistic
-    setVoted((prev) => {
-      const next = new Set(prev);
-      hasVoted ? next.delete(subId) : next.add(subId);
-      return next;
-    });
+  const toggleVote = async (submissionId: string) => {
+    setLoading(submissionId);
+    const hasVoted = localVoted.has(submissionId);
 
     if (hasVoted) {
-      await supabase.from("group_bet_votes").delete().eq("submission_id", subId).eq("user_id", userId);
-      await supabase.rpc("decrement_votes", { submission_id: subId });
+      await supabase
+        .from("group_bet_votes")
+        .delete()
+        .eq("submission_id", submissionId)
+        .eq("user_id", userId);
+      
+      await supabase
+        .from("group_bet_submissions")
+        .update({ votes: submissions.find(s => s.id === submissionId)!.votes - 1 })
+        .eq("id", submissionId);
+
+      setLocalVoted(prev => {
+        const next = new Set(prev);
+        next.delete(submissionId);
+        return next;
+      });
     } else {
-      await supabase.from("group_bet_votes").insert({ group_bet_id: groupBetId, submission_id: subId, user_id: userId });
-      await supabase.rpc("increment_votes", { submission_id: subId });
+      await supabase
+        .from("group_bet_votes")
+        .insert({ submission_id: submissionId, user_id: userId });
+      
+      await supabase
+        .from("group_bet_submissions")
+        .update({ votes: submissions.find(s => s.id === submissionId)!.votes + 1 })
+        .eq("id", submissionId);
+
+      setLocalVoted(prev => new Set([...prev, submissionId]));
     }
 
     router.refresh();
     setLoading(null);
   };
 
+  // Sort by votes
+  const sorted = [...submissions].sort((a, b) => b.votes - a.votes);
+
   return (
-    <div>
-      <p className="text-xs text-[var(--muted)] mb-3">Vote for the best legs (top {winningCount} win)</p>
-      <ul className="border-t border-[var(--border)]">
-        {submissions.map((sub) => {
-          const isOwn = sub.user_id === userId;
-          const isVoted = voted.has(sub.id);
-          return (
-            <li key={sub.id} className="border-b border-[var(--border)]">
+    <div className="space-y-2">
+      <p className="text-xs text-[var(--text-secondary)] mb-3">
+        Vote for your favourite picks. Top {winningCount} will form the final acca.
+      </p>
+      {sorted.map((s, i) => {
+        const isVoted = localVoted.has(s.id);
+        const isTop = i < winningCount;
+        const isOwn = s.user_id === userId;
+
+        return (
+          <div 
+            key={s.id} 
+            className={`flex items-center justify-between p-3 rounded border ${
+              isTop ? 'bg-green-50 border-green-200' : 'bg-[var(--bg)] border-[var(--border)]'
+            }`}
+          >
+            <div className="flex-1">
+              <p className="font-medium text-sm">{s.selection}</p>
+              <p className="text-xs text-[var(--text-secondary)]">
+                {s.profiles?.display_name} · {s.odds_fractional}
+                {isOwn && <span className="ml-1">(you)</span>}
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-semibold">{s.votes}</span>
               <button
-                onClick={() => toggle(sub.id)}
-                disabled={isOwn || loading === sub.id}
-                className={`w-full text-left py-3 text-sm ${isOwn ? "opacity-50" : ""}`}
+                onClick={() => toggleVote(s.id)}
+                disabled={loading === s.id}
+                className={`btn text-xs py-1 px-3 ${isVoted ? 'btn-primary' : 'btn-secondary'}`}
               >
-                <div className="flex justify-between">
-                  <span className={isVoted ? "font-medium" : ""}>{sub.selection}</span>
-                  <span className="text-[var(--muted)]">{sub.odds_fractional}</span>
-                </div>
-                <div className="flex justify-between text-xs text-[var(--muted)] mt-1">
-                  <span>{sub.profiles?.display_name}{isOwn ? " (you)" : ""}</span>
-                  <span>{isVoted ? "▲" : "△"} {sub.votes_count + (isVoted && !votedIds.has(sub.id) ? 1 : 0) - (!isVoted && votedIds.has(sub.id) ? 1 : 0)}</span>
-                </div>
+                {loading === s.id ? "..." : isVoted ? (
+                  <>
+                    <IconCheck className="w-3 h-3" />
+                    <span>Voted</span>
+                  </>
+                ) : "Vote"}
               </button>
-            </li>
-          );
-        })}
-      </ul>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

@@ -3,33 +3,31 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
+import { IconPlus, IconX } from "@/components/icons";
 
-interface Submission {
+interface Leg {
   selection: string;
-  odds_fractional: string;
+  odds: string;
 }
 
-export function SubmitLegsForm({ groupBetId, legsPerUser, userSubmissions, userId }: {
-  groupBetId: string;
-  legsPerUser: number;
-  userSubmissions: Submission[];
-  userId: string;
-}) {
-  const hasSubmitted = userSubmissions.length > 0;
+export function SubmitLegsForm({ groupBetId, legsRemaining }: { groupBetId: string; legsRemaining: number }) {
+  const [legs, setLegs] = useState<Leg[]>([{ selection: "", odds: "" }]);
   const [loading, setLoading] = useState(false);
-  const [legs, setLegs] = useState<Array<{ selection: string; odds: string }>>(
-    hasSubmitted
-      ? userSubmissions.map((s) => ({ selection: s.selection, odds: s.odds_fractional }))
-      : Array(legsPerUser).fill({ selection: "", odds: "" })
-  );
-
   const router = useRouter();
   const supabase = createClient();
 
-  const update = (i: number, field: string, value: string) => {
-    const next = [...legs];
-    next[i] = { ...next[i], [field]: value };
-    setLegs(next);
+  const addLeg = () => {
+    if (legs.length < legsRemaining) {
+      setLegs([...legs, { selection: "", odds: "" }]);
+    }
+  };
+
+  const removeLeg = (i: number) => setLegs(legs.filter((_, idx) => idx !== i));
+
+  const updateLeg = (i: number, field: keyof Leg, value: string) => {
+    const updated = [...legs];
+    updated[i][field] = value;
+    setLegs(updated);
   };
 
   const parseFrac = (f: string) => {
@@ -41,20 +39,15 @@ export function SubmitLegsForm({ groupBetId, legsPerUser, userSubmissions, userI
     e.preventDefault();
     setLoading(true);
 
-    const valid = legs.filter((l) => l.selection && l.odds);
-    if (valid.length !== legsPerUser) {
-      setLoading(false);
-      return;
-    }
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
 
-    if (hasSubmitted) {
-      await supabase.from("group_bet_submissions").delete().eq("group_bet_id", groupBetId).eq("user_id", userId);
-    }
+    const validLegs = legs.filter(l => l.selection && l.odds);
 
     await supabase.from("group_bet_submissions").insert(
-      valid.map((l) => ({
+      validLegs.map(l => ({
         group_bet_id: groupBetId,
-        user_id: userId,
+        user_id: user.id,
         selection: l.selection,
         odds_fractional: l.odds,
         odds_decimal: parseFrac(l.odds),
@@ -62,34 +55,51 @@ export function SubmitLegsForm({ groupBetId, legsPerUser, userSubmissions, userI
     );
 
     router.refresh();
+    setLegs([{ selection: "", odds: "" }]);
     setLoading(false);
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
-      <p className="text-xs text-[var(--muted)]">
-        {hasSubmitted ? "Your submissions (can edit until voting)" : `Submit ${legsPerUser} legs`}
-      </p>
-
       {legs.map((leg, i) => (
         <div key={i} className="flex gap-2">
           <input
             value={leg.selection}
-            onChange={(e) => update(i, "selection", e.target.value)}
-            placeholder="Selection"
+            onChange={(e) => updateLeg(i, "selection", e.target.value)}
+            placeholder="e.g. Arsenal to win"
             className="flex-1"
           />
           <input
             value={leg.odds}
-            onChange={(e) => update(i, "odds", e.target.value)}
-            placeholder="Odds"
-            className="w-20"
+            onChange={(e) => updateLeg(i, "odds", e.target.value)}
+            placeholder="2/1"
+            className="w-20 text-center"
           />
+          {legs.length > 1 && (
+            <button type="button" onClick={() => removeLeg(i)} className="p-2 text-[var(--danger)]">
+              <IconX className="w-5 h-5" />
+            </button>
+          )}
         </div>
       ))}
 
-      <button type="submit" disabled={loading} className="w-full py-2.5 bg-[var(--white)] text-[var(--bg)] rounded text-sm font-medium">
-        {loading ? "..." : hasSubmitted ? "Update" : "Submit"}
+      {legs.length < legsRemaining && (
+        <button 
+          type="button"
+          onClick={addLeg} 
+          className="flex items-center gap-1 text-[var(--accent)] font-medium text-sm"
+        >
+          <IconPlus className="w-4 h-4" />
+          <span>Add another</span>
+        </button>
+      )}
+
+      <button
+        type="submit"
+        disabled={loading || !legs.some(l => l.selection && l.odds)}
+        className="btn btn-primary w-full"
+      >
+        {loading ? "Submitting..." : "Submit Legs"}
       </button>
     </form>
   );

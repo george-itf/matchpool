@@ -3,6 +3,7 @@ import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import { CopyButton } from "@/components/copy-button";
 import { IconArrowLeft, IconSettings, IconArrowRight, IconPlus } from "@/components/icons";
+import { DeadlineCountdown } from "@/components/deadline-countdown";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -78,7 +79,7 @@ export default async function LeaguePage({ params }: PageProps) {
   const buyin = league.weekly_buyin || 5;
 
   return (
-    <main className="min-h-screen bg-[var(--bg)] safe-t pb-24">
+    <main className="min-h-screen bg-[var(--bg)] safe-t" style={{ paddingBottom: '100px' }}>
       {/* Header */}
       <div className="header flex items-center justify-between">
         <Link href="/dashboard" className="flex items-center gap-1 text-[var(--accent)] font-medium text-sm">
@@ -107,8 +108,14 @@ export default async function LeaguePage({ params }: PageProps) {
             </div>
           </div>
 
+          {/* Deadline countdown */}
+          <DeadlineCountdown 
+            deadlineDay={league.bet_deadline_day ?? 5} 
+            deadlineHour={league.bet_deadline_hour ?? 15} 
+          />
+
           {/* Payment status */}
-          <div className="flex items-center justify-between p-3 bg-[var(--bg)] rounded">
+          <div className="flex items-center justify-between p-3 bg-[var(--bg)] rounded mt-3">
             <div>
               <p className="font-medium text-sm">Week {currentWeek} buy-in</p>
               <p className="text-xs text-[var(--text-secondary)]">£{buyin} per week</p>
@@ -206,7 +213,7 @@ export default async function LeaguePage({ params }: PageProps) {
         </div>
 
         {/* Group bets link */}
-        <Link href={`/league/${id}/group-bet`} className="card flex items-center justify-between">
+        <Link href={`/league/${id}/group-bet`} className="card flex items-center justify-between mb-4">
           <div>
             <p className="font-semibold text-sm">Group Bets</p>
             <p className="text-xs text-[var(--text-secondary)]">Vote on legs, share the pot</p>
@@ -216,17 +223,24 @@ export default async function LeaguePage({ params }: PageProps) {
       </div>
 
       {/* Fixed bottom button */}
-      {season && (
-        <div className="bottom-fixed">
-          <Link
-            href={`/league/${id}/bet/new?season=${season.id}`}
-            className="btn btn-primary w-full"
-          >
-            <IconPlus className="w-4 h-4" />
-            <span>Add Bet</span>
-          </Link>
-        </div>
-      )}
+      <div style={{
+        position: 'fixed',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        padding: '16px',
+        background: 'var(--surface)',
+        borderTop: '1px solid var(--border)',
+        zIndex: 50
+      }}>
+        <Link
+          href={`/league/${id}/bet/new?season=${season?.id || ''}`}
+          className="btn btn-primary w-full"
+        >
+          <IconPlus className="w-4 h-4" />
+          <span>Add Bet</span>
+        </Link>
+      </div>
     </main>
   );
 }
