@@ -202,12 +202,16 @@ betmates/
 │   │   │   ├── settings/page.tsx
 │   │   │   ├── bet/new/page.tsx
 │   │   │   ├── bets/page.tsx
+│   │   │   ├── members/page.tsx
+│   │   │   ├── stats/page.tsx
 │   │   │   └── group-bet/
 │   │   │       ├── page.tsx
 │   │   │       └── [groupBetId]/page.tsx
+│   │   ├── join/[code]/page.tsx
 │   │   └── api/
 │   │       ├── parse-screenshot/route.ts
-│   │       └── send-push/route.ts
+│   │       ├── send-push/route.ts
+│   │       └── cron/deadline-reminder/route.ts
 │   ├── components/
 │   │   ├── activity-feed.tsx
 │   │   ├── copy-button.tsx
@@ -220,6 +224,8 @@ betmates/
 │   │   ├── season-controls.tsx
 │   │   ├── settings-form.tsx
 │   │   ├── settle-bets.tsx
+│   │   ├── share-link-button.tsx
+│   │   ├── member-actions.tsx
 │   │   └── sign-out-button.tsx
 │   ├── lib/
 │   │   └── supabase/
@@ -241,6 +247,7 @@ ANTHROPIC_API_KEY=sk-ant-...
 NEXT_PUBLIC_VAPID_PUBLIC_KEY=...
 VAPID_PRIVATE_KEY=...
 PUSH_API_KEY=...
+CRON_SECRET=...
 ```
 
 ---
@@ -311,6 +318,33 @@ PUSH_API_KEY=...
 - Added activity-feed.tsx component
 - Activity logging on bet settlement
 
+### Session 7
+- Enhanced Season Management in settings page
+  - Added detailed season info display (dates, days remaining, pot)
+  - Auto-fetch leaderboard to pre-select winner on end season
+  - Display past seasons when no active season
+- Added Pot Calculation RPC function (supabase/pot_calculation.sql)
+  - update_season_pot function calculates pot from paid payments
+- Created Member List page (/league/[id]/members)
+  - Shows all members with roles, join dates, payment status
+  - Admin actions: promote/demote/remove members
+  - member-actions.tsx component with dropdown menu
+- Added Share Invite Link functionality
+  - Created /join/[code] page for invite link handling
+  - Auto-join for logged in users, signup prompt for guests
+  - ShareLinkButton component using Web Share API
+  - Logs member_joined activity on join
+- Built Stats Dashboard page (/league/[id]/stats)
+  - Season overview (members, pot, total bets, win rate)
+  - Money stats (staked, returns, profit, averages)
+  - Bet breakdown (pending/won/lost, acca stats)
+  - Highlights (top performer, worst luck, most active, biggest win)
+- Added Notification Triggers with Vercel Cron
+  - /api/cron/deadline-reminder route
+  - Sends push notifications 24h and 1h before bet deadline
+  - vercel.json configured for hourly cron execution
+  - Requires CRON_SECRET env var for authentication
+
 ---
 
 ## Known Issues / TODO
@@ -319,6 +353,9 @@ PUSH_API_KEY=...
 - Run new SQL migrations in Supabase:
   - supabase/push_subscriptions.sql
   - supabase/activity_log.sql
+  - supabase/pot_calculation.sql
+  - supabase/activity_reactions.sql
+  - supabase/activity_comments.sql
 - Group bet SQL functions need to be run in Supabase:
   - increment_votes
   - decrement_votes
@@ -326,6 +363,7 @@ PUSH_API_KEY=...
   - finalize_group_bet
 - PWA icons returning 404 (need to add icon files)
 - Generate and configure VAPID keys for push notifications
+- Add CRON_SECRET env var in Vercel for cron job auth
 
 ### Future Enhancements
 - Custom domain
@@ -363,6 +401,13 @@ Sends push notifications to specified users. Requires Bearer token auth.
   "tag": "bet-settled"
 }
 ```
+
+### GET /api/cron/deadline-reminder
+Cron job endpoint for deadline reminders. Requires Bearer token auth with CRON_SECRET.
+- Runs hourly via Vercel Cron
+- Sends push notifications 24 hours before deadline
+- Sends urgent notifications 1 hour before deadline
+- Returns count of notifications sent
 
 ---
 
@@ -422,8 +467,8 @@ ORDER BY profit DESC
 - [x] Admin: mark payment as paid
 - [x] Admin: edit league settings
 - [x] Admin: view members
-- [ ] Admin: promote/demote members
-- [ ] Admin: kick member
+- [x] Admin: promote/demote members
+- [x] Admin: kick member
 - [ ] Admin: end season
 - [ ] Admin: start new season
 - [ ] Create group bet
@@ -431,3 +476,6 @@ ORDER BY profit DESC
 - [ ] Vote on legs
 - [ ] Finalize group bet
 - [x] Sign out
+- [ ] Share invite link
+- [ ] Join via invite link
+- [ ] View stats dashboard

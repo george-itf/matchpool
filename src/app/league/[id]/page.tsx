@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import { CopyButton } from "@/components/copy-button";
+import { ShareLinkButton } from "@/components/share-link-button";
 import { ActivityFeed } from "@/components/activity-feed";
 import { IconArrowLeft, IconSettings, IconArrowRight, IconPlus } from "@/components/icons";
 import { DeadlineCountdown } from "@/components/deadline-countdown";
@@ -158,7 +159,10 @@ export default async function LeaguePage({ params }: PageProps) {
               <p className="section-header">Invite Code</p>
               <p className="text-xl font-bold mono tracking-wider">{league.invite_code}</p>
             </div>
-            <CopyButton text={league.invite_code} />
+            <div className="flex items-center gap-2">
+              <CopyButton text={league.invite_code} />
+              <ShareLinkButton inviteCode={league.invite_code} />
+            </div>
           </div>
         </div>
 
@@ -242,6 +246,24 @@ export default async function LeaguePage({ params }: PageProps) {
           <div>
             <p className="font-semibold text-sm">Group Bets</p>
             <p className="text-xs text-[var(--text-secondary)]">Vote on legs, share the pot</p>
+          </div>
+          <IconArrowRight className="w-5 h-5 text-[var(--text-secondary)]" />
+        </Link>
+
+        {/* Members link */}
+        <Link href={`/league/${id}/members`} className="card flex items-center justify-between mb-4">
+          <div>
+            <p className="font-semibold text-sm">Members</p>
+            <p className="text-xs text-[var(--text-secondary)]">View league members and payment status</p>
+          </div>
+          <IconArrowRight className="w-5 h-5 text-[var(--text-secondary)]" />
+        </Link>
+
+        {/* Stats link */}
+        <Link href={`/league/${id}/stats`} className="card flex items-center justify-between mb-4">
+          <div>
+            <p className="font-semibold text-sm">Stats</p>
+            <p className="text-xs text-[var(--text-secondary)]">Season statistics and highlights</p>
           </div>
           <IconArrowRight className="w-5 h-5 text-[var(--text-secondary)]" />
         </Link>

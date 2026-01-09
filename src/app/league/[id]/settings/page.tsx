@@ -51,7 +51,7 @@ export default async function SettingsPage({ params }: PageProps) {
     profiles: Array.isArray(m.profiles) ? m.profiles[0] : m.profiles
   }));
 
-  const seasons = (league.seasons || []) as Array<{ id: string; status: string; season_number: number; starts_at: string; pot_amount: number; winner_id: string | null }>;
+  const seasons = (league.seasons || []) as Array<{ id: string; status: string; season_number: number; starts_at: string; ends_at: string; pot_amount: number; winner_id: string | null }>;
   const currentSeason = seasons.find((s) => s.status === "active");
 
   const currentWeek = currentSeason 
