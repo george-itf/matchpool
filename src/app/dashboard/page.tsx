@@ -5,6 +5,28 @@ import { LeagueCard } from "@/components/league-card";
 import { CreateLeagueButton } from "@/components/create-league-button";
 import { JoinLeagueButton } from "@/components/join-league-button";
 
+interface Season {
+  id: string;
+  season_number: number;
+  status: string;
+  starts_at: string;
+  ends_at: string;
+  pot_amount: number;
+}
+
+interface League {
+  id: string;
+  name: string;
+  invite_code: string;
+  weekly_buyin: number;
+  seasons: Season[];
+}
+
+interface Membership {
+  role: string;
+  league: League;
+}
+
 export default async function DashboardPage() {
   const supabase = await createClient();
 
@@ -45,13 +67,19 @@ export default async function DashboardPage() {
     `)
     .eq("user_id", user.id);
 
-  const leagues = memberships?.map((m) => ({
-    ...m.league,
-    role: m.role,
-    currentSeason: m.league?.seasons?.find((s: { status: string }) => s.status === "active") || 
-                   m.league?.seasons?.find((s: { status: string }) => s.status === "upcoming") ||
-                   m.league?.seasons?.[0],
-  })) || [];
+  const typedMemberships = memberships as unknown as Membership[];
+
+  const leagues = typedMemberships?.map((m) => {
+    const league = m.league;
+    const seasons = league?.seasons || [];
+    return {
+      ...league,
+      role: m.role,
+      currentSeason: seasons.find((s) => s.status === "active") || 
+                     seasons.find((s) => s.status === "upcoming") ||
+                     seasons[0],
+    };
+  }) || [];
 
   return (
     <main className="min-h-screen p-6 safe-top safe-bottom">
