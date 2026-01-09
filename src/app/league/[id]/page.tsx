@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
+import { CopyButton } from "@/components/copy-button";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -127,12 +128,7 @@ export default async function LeaguePage({ params }: PageProps) {
               <p className="text-sm text-[var(--text-secondary)]">Invite code</p>
               <p className="text-xl font-bold mono">{league.invite_code}</p>
             </div>
-            <button 
-              onClick={() => navigator.clipboard.writeText(league.invite_code)}
-              className="btn btn-secondary text-sm py-2 px-4"
-            >
-              Copy
-            </button>
+            <CopyButton text={league.invite_code} />
           </div>
         </div>
 

@@ -5,6 +5,7 @@ import { SettingsForm } from "@/components/settings-form";
 import { MembersList } from "@/components/members-list";
 import { SeasonControls } from "@/components/season-controls";
 import { PaymentsTracker } from "@/components/payments-tracker";
+import { CopyButton } from "@/components/copy-button";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -88,7 +89,7 @@ export default async function SettingsPage({ params }: PageProps) {
               <p className="text-sm text-[var(--text-secondary)]">Invite code</p>
               <p className="text-2xl font-bold mono">{league.invite_code}</p>
             </div>
-            <button className="btn btn-secondary text-sm">Copy</button>
+            <CopyButton text={league.invite_code} />
           </div>
         </div>
 
