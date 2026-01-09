@@ -25,10 +25,10 @@ export default function NewBetPage({ params }: { params: Promise<{ id: string }>
   const seasonId = searchParams.get("season");
 
   const [mode, setMode] = useState<"choose" | "upload" | "manual">("choose");
-  const [uploading, setUploading] = useState(false);
-  const [parsing, setParsing] = useState(false);
+  const [loadingText, setLoadingText] = useState("");
   const [saving, setSaving] = useState(false);
   const [showBrowser, setShowBrowser] = useState(false);
+  const [error, setError] = useState("");
 
   const [stake, setStake] = useState("");
   const [potentialReturn, setPotentialReturn] = useState("");
@@ -53,37 +53,61 @@ export default function NewBetPage({ params }: { params: Promise<{ id: string }>
     const file = e.target.files?.[0];
     if (!file) return;
 
-    setUploading(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-
-    const path = `${user.id}/${Date.now()}-${file.name}`;
-    await supabase.storage.from("screenshots").upload(path, file);
-
-    setUploading(false);
-    setParsing(true);
-
-    const formData = new FormData();
-    formData.append("image", file);
+    setError("");
+    setMode("upload");
+    setLoadingText("Uploading image...");
 
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setError("Not logged in");
+        setMode("choose");
+        return;
+      }
+
+      // Upload to storage (optional - for record keeping)
+      const path = `${user.id}/${Date.now()}-${file.name}`;
+      await supabase.storage.from("screenshots").upload(path, file);
+
+      setLoadingText("Reading bet slip with AI...");
+
+      // Parse with Claude
+      const formData = new FormData();
+      formData.append("image", file);
+
       const res = await fetch("/api/parse-screenshot", { method: "POST", body: formData });
       const data = await res.json();
 
+      console.log("Parse result:", data);
+
+      if (data.error) {
+        setError(data.error);
+        setMode("manual");
+        setLegs([{ selection: "", odds: "" }]);
+        return;
+      }
+
+      // Populate form with parsed data
       if (data.stake) setStake(data.stake.toString());
       if (data.potential_return) setPotentialReturn(data.potential_return.toString());
       if (data.status) setStatus(data.status);
       if (data.legs?.length) {
-        setLegs(data.legs.map((l: { selection: string; odds_fractional: string }) => ({
-          selection: l.selection,
-          odds: l.odds_fractional,
+        setLegs(data.legs.map((l: { selection: string; odds_fractional: string; odds_decimal: number }) => ({
+          selection: l.selection || "",
+          odds: l.odds_fractional || "",
+          oddsDecimal: l.odds_decimal,
         })));
+      } else {
+        setLegs([{ selection: "", odds: "" }]);
       }
+
       setMode("manual");
-    } catch {
+    } catch (err) {
+      console.error("Screenshot error:", err);
+      setError("Failed to process screenshot");
       setMode("manual");
+      setLegs([{ selection: "", odds: "" }]);
     }
-    setParsing(false);
   };
 
   const handleBrowseSelect = (selection: {
@@ -196,6 +220,13 @@ export default function NewBetPage({ params }: { params: Promise<{ id: string }>
       </div>
 
       <div className="p-4 max-w-lg mx-auto">
+        {/* Error message */}
+        {error && (
+          <div className="mb-4 p-3 bg-red-50 text-[var(--danger)] rounded text-sm">
+            {error}
+          </div>
+        )}
+
         {mode === "choose" && (
           <div className="space-y-4">
             <p className="text-[var(--text-secondary)] text-center text-sm mb-6">How do you want to add your bet?</p>
@@ -227,7 +258,11 @@ export default function NewBetPage({ params }: { params: Promise<{ id: string }>
 
         {mode === "upload" && (
           <div className="card text-center py-12">
-            <p>{uploading ? "Uploading..." : parsing ? "Reading bet slip..." : "Processing..."}</p>
+            <div className="animate-pulse">
+              <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-[var(--accent)] opacity-20"></div>
+              <p className="font-medium">{loadingText}</p>
+              <p className="text-sm text-[var(--text-secondary)] mt-1">This may take a few seconds</p>
+            </div>
           </div>
         )}
 
